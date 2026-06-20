@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #fafbfc;
   --foreground: #1a1a2e;
@@ -21,24 +23,22 @@
   --card-shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f172a;
-    --foreground: #e2e8f0;
-    --primary: #34d399;
-    --primary-dark: #10b981;
-    --primary-light: #064e3b;
-    --secondary: #fbbf24;
-    --secondary-dark: #f59e0b;
-    --accent: #818cf8;
-    --accent-light: #1e1b4b;
-    --surface: #1e293b;
-    --surface-hover: #334155;
-    --border: #334155;
-    --muted: #94a3b8;
-    --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
-    --card-shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
-  }
+.dark {
+  --background: #0f172a;
+  --foreground: #e2e8f0;
+  --primary: #34d399;
+  --primary-dark: #10b981;
+  --primary-light: #064e3b;
+  --secondary: #fbbf24;
+  --secondary-dark: #f59e0b;
+  --accent: #818cf8;
+  --accent-light: #1e1b4b;
+  --surface: #1e293b;
+  --surface-hover: #334155;
+  --border: #334155;
+  --muted: #94a3b8;
+  --card-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.2);
+  --card-shadow-hover: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
 }
 
 @theme inline {
@@ -55,6 +55,7 @@
   --color-surface-hover: var(--surface-hover);
   --color-border: var(--border);
   --color-muted: var(--muted);
+  --color-danger: var(--danger);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -132,12 +133,22 @@ html {
   100% { background-position: 200% center; }
 }
 
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
 .animate-fade-in-up {
   animation: fadeInUp 0.6s ease-out forwards;
 }
 
 .animate-fade-in {
   animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
 }
 
 .animate-slide-in-left {

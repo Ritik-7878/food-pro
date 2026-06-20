@@ -99,7 +99,7 @@ export default function LoginPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   className={`w-full px-4 pr-12 py-3 text-sm bg-surface/50 border rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${
                     errors.password
-                      ? "border-danger focus:ring-danger/20 focus:border-danger text-danger"
+                      ? "border-danger focus:ring-danger/20 focus:border-danger text-danger animate-shake"
                       : "border-border focus:ring-primary/20 focus:border-primary text-foreground"
                   }`}
                 />
@@ -112,7 +112,7 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
                 </button>
               </div>
-              {errors.password && <span className="text-xs text-danger font-medium mt-1.5 block animate-fade-in">{errors.password}</span>}
+              {errors.password && <span className="text-xs text-danger font-medium mt-1.5 block animate-fade-in animate-shake">{errors.password}</span>}
             </div>
 
             {/* Remember Me */}

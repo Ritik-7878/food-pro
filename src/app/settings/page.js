@@ -22,6 +22,8 @@ export default function SettingsPage() {
   const [confirmModal, setConfirmModal] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  const [errors, setErrors] = useState({});
+
   const [profile, setProfile] = useState({
     name: "Ritik Choudhary",
     email: "ritik@foodpro.com",
@@ -30,10 +32,18 @@ export default function SettingsPage() {
   });
 
   const handleSave = () => {
-    if (!profile.name || !profile.email) {
-      toast.error("Name and Email are required.");
+    const newErrors = {};
+    if (!profile.name) newErrors.name = "Full name is required";
+    if (!profile.email) newErrors.email = "Email is required";
+    else if (!/\S+@\S+\.\S+/.test(profile.email)) newErrors.email = "Invalid email address";
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      toast.error("Please correct the errors in the form.");
       return;
     }
+
     setSaving(true);
     setTimeout(() => {
       setSaving(false);
@@ -71,14 +81,22 @@ export default function SettingsPage() {
               label="Full Name"
               placeholder="Your name"
               value={profile.name}
-              onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+              onChange={(e) => {
+                setProfile({ ...profile, name: e.target.value });
+                if (errors.name) setErrors({ ...errors, name: "" });
+              }}
+              error={errors.name}
             />
             <Input
               label="Email"
               type="email"
               placeholder="you@company.com"
               value={profile.email}
-              onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+              onChange={(e) => {
+                setProfile({ ...profile, email: e.target.value });
+                if (errors.email) setErrors({ ...errors, email: "" });
+              }}
+              error={errors.email}
             />
             <Input
               label="Company"
