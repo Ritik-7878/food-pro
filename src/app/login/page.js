@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { Button, Input, Loader } from "@/components/ui";
+import { useToast } from "@/components/ui/Toast";
 import {
   ChefHat,
-  Mail,
-  Lock,
   Eye,
   EyeOff,
   ArrowRight,
@@ -14,6 +14,36 @@ import {
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState({});
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const newErrors = {};
+
+    if (!email) newErrors.email = "Email is required";
+    else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = "Invalid email address";
+    if (!password) newErrors.password = "Password is required";
+    else if (password.length < 6) newErrors.password = "Must be at least 6 characters";
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length === 0) {
+      setLoading(true);
+      // Simulate API call
+      setTimeout(() => {
+        setLoading(false);
+        if (email === "admin@foodpro.com" && password === "password") {
+          toast.success("Signed in successfully! Welcome back.");
+        } else {
+          toast.error("Invalid credentials. Try admin@foodpro.com / password");
+        }
+      }, 1500);
+    }
+  };
 
   return (
     <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
@@ -39,27 +69,21 @@ export default function LoginPage() {
 
         {/* Login Card */}
         <div className="bg-surface border border-border rounded-2xl p-8 shadow-xl">
-          <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
+          <form className="space-y-5" onSubmit={handleSubmit}>
             {/* Email Field */}
-            <div>
-              <label htmlFor="login-email" className="block text-sm font-medium text-foreground mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted" />
-                <input
-                  id="login-email"
-                  type="email"
-                  placeholder="you@company.com"
-                  className="w-full pl-11 pr-4 py-3 bg-background border border-border rounded-xl text-foreground placeholder:text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all duration-200"
-                />
-              </div>
-            </div>
+            <Input
+              label="Email Address"
+              type="email"
+              placeholder="you@company.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              error={errors.email}
+            />
 
             {/* Password Field */}
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label htmlFor="login-password" className="block text-sm font-medium text-foreground">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-muted dark:text-muted/80 tracking-wide uppercase">
                   Password
                 </label>
                 <a href="#" className="text-xs text-primary hover:text-primary-dark transition-colors">
@@ -67,12 +91,17 @@ export default function LoginPage() {
                 </a>
               </div>
               <div className="relative">
-                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-muted" />
                 <input
                   id="login-password"
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
-                  className="w-full pl-11 pr-12 py-3 bg-background border border-border rounded-xl text-foreground placeholder:text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all duration-200"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className={`w-full px-4 pr-12 py-3 text-sm bg-surface/50 border rounded-xl focus:outline-none focus:ring-2 transition-all duration-200 ${
+                    errors.password
+                      ? "border-danger focus:ring-danger/20 focus:border-danger text-danger"
+                      : "border-border focus:ring-primary/20 focus:border-primary text-foreground"
+                  }`}
                 />
                 <button
                   type="button"
@@ -83,6 +112,7 @@ export default function LoginPage() {
                   {showPassword ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
                 </button>
               </div>
+              {errors.password && <span className="text-xs text-danger font-medium mt-1.5 block animate-fade-in">{errors.password}</span>}
             </div>
 
             {/* Remember Me */}
@@ -98,14 +128,20 @@ export default function LoginPage() {
             </div>
 
             {/* Sign In Button */}
-            <button
+            <Button
               type="submit"
+              variant="primary"
+              size="lg"
+              disabled={loading}
+              className="w-full"
               id="login-submit"
-              className="w-full flex items-center justify-center gap-2 py-3.5 bg-gradient-to-r from-primary to-primary-dark text-white font-semibold rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all duration-300 hover:-translate-y-0.5"
             >
-              Sign In
-              <ArrowRight className="w-4 h-4" />
-            </button>
+              {loading ? (
+                <Loader size="sm" className="mr-2" />
+              ) : null}
+              {loading ? "Signing In..." : "Sign In"}
+              {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
+            </Button>
           </form>
 
           {/* Divider */}
@@ -117,7 +153,7 @@ export default function LoginPage() {
 
           {/* Social Logins */}
           <div className="grid grid-cols-2 gap-3">
-            <button className="flex items-center justify-center gap-2 py-3 bg-background border border-border rounded-xl text-sm font-medium text-foreground hover:bg-surface-hover hover:border-primary/30 transition-all duration-200">
+            <Button variant="outline" className="gap-2">
               <svg className="w-4.5 h-4.5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -125,11 +161,11 @@ export default function LoginPage() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
               Google
-            </button>
-            <button className="flex items-center justify-center gap-2 py-3 bg-background border border-border rounded-xl text-sm font-medium text-foreground hover:bg-surface-hover hover:border-primary/30 transition-all duration-200">
+            </Button>
+            <Button variant="outline" className="gap-2">
               <Share2 className="w-4.5 h-4.5" />
               GitHub
-            </button>
+            </Button>
           </div>
         </div>
 
