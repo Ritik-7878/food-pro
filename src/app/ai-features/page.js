@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Modal, Loader } from "@/components/ui";
-import { useToast } from "@/components/ui/Toast";
+import { Button, Modal, Loader, useToast } from "@/components";
 import {
   Cpu,
   ScanLine,

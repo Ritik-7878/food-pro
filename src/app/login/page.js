@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { Button, Input, Loader } from "@/components/ui";
-import { useToast } from "@/components/ui/Toast";
+import { Button, Input, Loader, useToast } from "@/components";
 import {
   ChefHat,
   Eye,

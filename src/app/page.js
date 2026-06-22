@@ -1,5 +1,4 @@
-import Hero from "@/components/Hero";
-import Card from "@/components/Card";
+import { Hero, Card } from "@/components";
 import {
   Factory,
   Thermometer,

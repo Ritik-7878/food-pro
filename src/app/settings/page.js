@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, Input, Modal, Loader } from "@/components/ui";
-import { useToast } from "@/components/ui/Toast";
+import { Button, Input, Modal, Loader, useToast } from "@/components";
 import { useTheme } from "@/context/ThemeContext";
 import {
   User,

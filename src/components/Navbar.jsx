@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { useTheme } from "@/context/ThemeContext";
 import {
   Menu,
   X,
@@ -12,21 +13,27 @@ import {
   LayoutDashboard,
   BookOpen,
   Info,
+  Cpu,
+  Sun,
+  Moon,
+  Settings,
 } from "lucide-react";
 
 const navLinks = [
   { href: "/", label: "Home", icon: Home },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/recipes", label: "Processes", icon: BookOpen },
+  { href: "/ai-features", label: "AI Inspection", icon: Cpu },
   { href: "/about", label: "About", icon: Info },
 ];
 
 export default function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
 
   return (
-    <nav className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-border transition-all duration-300">
+    <nav className="sticky top-0 z-50 bg-surface/80 dark:bg-surface/75 backdrop-blur-xl border-b border-border transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           {/* Logo */}
@@ -43,7 +50,7 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Nav Links */}
-          <div className="hidden md:flex items-center gap-1">
+          <div className="hidden lg:flex items-center gap-1">
             {navLinks.map((link) => {
               const isActive = pathname === link.href;
               const Icon = link.icon;
@@ -51,7 +58,7 @@ export default function Navbar() {
                 <Link
                   key={link.href}
                   href={link.href}
-                  id={`nav-${link.label.toLowerCase()}`}
+                  id={`nav-${link.label.toLowerCase().replace(" ", "-")}`}
                   className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                     isActive
                       ? "bg-primary/10 text-primary shadow-sm"
@@ -65,12 +72,41 @@ export default function Navbar() {
             })}
           </div>
 
-          {/* Right side: Profile + Mobile toggle */}
-          <div className="flex items-center gap-3">
+          {/* Right side: Profile + Settings + Theme + Mobile toggle */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Theme Toggle Button */}
+            <button
+              onClick={toggleTheme}
+              className="w-9 h-9 rounded-lg bg-surface-hover border border-border flex items-center justify-center text-muted hover:text-foreground transition-all duration-200 hover:scale-105 cursor-pointer"
+              id="nav-theme-toggle"
+              aria-label="Toggle theme"
+            >
+              {theme === "dark" ? (
+                <Sun className="w-4 h-4 text-secondary" />
+              ) : (
+                <Moon className="w-4 h-4" />
+              )}
+            </button>
+
+            {/* Settings Link */}
+            <Link
+              href="/settings"
+              id="nav-settings"
+              className={`w-9 h-9 rounded-lg bg-surface-hover border border-border flex items-center justify-center text-muted hover:text-foreground transition-all duration-200 hover:scale-105 ${
+                pathname === "/settings" ? "text-primary border-primary/30 bg-primary/5" : ""
+              }`}
+              aria-label="Settings"
+            >
+              <Settings className="w-4 h-4" />
+            </Link>
+
+            {/* Profile Link */}
             <Link
               href="/login"
               id="nav-profile"
-              className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 border border-border flex items-center justify-center text-muted hover:text-primary hover:border-primary/40 transition-all duration-200 hover:scale-105"
+              className={`w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 border border-border flex items-center justify-center text-muted hover:text-primary hover:border-primary/40 transition-all duration-200 hover:scale-105 ${
+                pathname === "/login" ? "ring-2 ring-primary/40" : ""
+              }`}
             >
               <User className="w-4 h-4" />
             </Link>
@@ -78,7 +114,7 @@ export default function Navbar() {
             {/* Mobile menu button */}
             <button
               onClick={() => setMobileOpen(!mobileOpen)}
-              className="md:hidden w-9 h-9 rounded-lg bg-surface-hover flex items-center justify-center text-muted hover:text-foreground transition-colors"
+              className="lg:hidden w-9 h-9 rounded-lg bg-surface-hover flex items-center justify-center text-muted hover:text-foreground transition-colors"
               id="nav-mobile-toggle"
               aria-label="Toggle mobile menu"
             >
@@ -90,11 +126,11 @@ export default function Navbar() {
 
       {/* Mobile Nav Panel */}
       <div
-        className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${
-          mobileOpen ? "max-h-80 opacity-100" : "max-h-0 opacity-0"
+        className={`lg:hidden overflow-hidden transition-all duration-300 ease-in-out ${
+          mobileOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
         }`}
       >
-        <div className="px-4 pb-4 space-y-1 border-t border-border bg-surface/90 backdrop-blur-xl">
+        <div className="px-4 pb-4 space-y-1 border-t border-border bg-surface/90 dark:bg-surface/85 backdrop-blur-xl">
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
             const Icon = link.icon;
@@ -105,7 +141,7 @@ export default function Navbar() {
                 onClick={() => setMobileOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 ${
                   isActive
-                    ? "bg-primary/10 text-primary"
+                    ? "bg-primary/10 text-primary shadow-xs"
                     : "text-muted hover:text-foreground hover:bg-surface-hover"
                 }`}
               >
