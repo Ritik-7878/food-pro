@@ -1,0 +1,207 @@
+{
+  "info": {
+    "_postman_id": "4b2e88a0-2f3b-4c4f-a9cb-f80e5b7b99c0",
+    "name": "FoodPro API Collection",
+    "description": "Collection of requests for testing the FoodPro Express backend API endpoints.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Root Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5001/",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5001",
+          "path": [
+            ""
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "List All Production Lines",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5001/api/production-lines",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5001",
+          "path": [
+            "api",
+            "production-lines"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Search Production Lines",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5001/api/production-lines/search?q=Dairy",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5001",
+          "path": [
+            "api",
+            "production-lines",
+            "search"
+          ],
+          "query": [
+            {
+              "key": "q",
+              "value": "Dairy"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get Single Production Line",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5001/api/production-lines/1",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5001",
+          "path": [
+            "api",
+            "production-lines",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Create Production Line",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Line 15 — Ice Cream Extrusion\",\n  \"status\": \"Running\",\n  \"progress\": 10,\n  \"temp\": \"-18.5°C\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5001/api/production-lines",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5001",
+          "path": [
+            "api",
+            "production-lines"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Replace Production Line",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Line 1 — Dairy Pasteurization Unit\",\n  \"status\": \"Paused\",\n  \"progress\": 0,\n  \"temp\": \"72.0°C\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5001/api/production-lines/1",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5001",
+          "path": [
+            "api",
+            "production-lines",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Partially Update Production Line",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"status\": \"Running\",\n  \"progress\": 50\n}"
+        },
+        "url": {
+          "raw": "http://localhost:5001/api/production-lines/1",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5001",
+          "path": [
+            "api",
+            "production-lines",
+            "1"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Delete Production Line",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:5001/api/production-lines/2",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "5001",
+          "path": [
+            "api",
+            "production-lines",
+            "2"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

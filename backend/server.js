@@ -240,6 +240,12 @@ app.get('/', (req, res) => {
   res.status(200).json({ status: "ok", message: "FoodPro API is running." });
 });
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error("Unhandled error captured in middleware:", err.stack);
+  res.status(500).json({ error: "Something went wrong! Internal Server Error." });
+});
+
 // Start Server
 app.listen(PORT, () => {
   console.log(`Server is listening on port ${PORT}`);
