@@ -1,0 +1,49 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        BigInt   @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  role      String   @default("Operator")
+  company   String?  @default("")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  productionLines ProductionLine[]
+
+  @@map("users")
+}
+
+model ProductionLine {
+  id             BigInt   @id @default(autoincrement())
+  name           String
+  status         String
+  progress       Int
+  temp           String
+  assignedUserId BigInt?  @map("assigned_user_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  assignedUser   User?    @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  batchLogs      BatchLog[]
+
+  @@map("production_lines")
+}
+
+model BatchLog {
+  id               BigInt    @id @default(autoincrement())
+  productionLineId BigInt    @map("production_line_id")
+  batchNumber      String    @map("batch_number")
+  status           String
+  startedAt        DateTime  @default(now()) @map("started_at")
+  completedAt      DateTime? @map("completed_at")
+  notes            String?   @default("")
+
+  productionLine   ProductionLine @relation(fields: [productionLineId], references: [id], onDelete: Cascade)
+
+  @@map("batch_logs")
+}
