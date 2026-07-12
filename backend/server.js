@@ -1,22 +1,72 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const passport = require('passport');
+const GitHubStrategy = require('passport-github2').Strategy;
+const session = require('express-session');
+const { z } = require('zod');
 const { Pool } = require('pg');
 const pgConnectionString = require('pg-connection-string');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const { PrismaClient } = require('@prisma/client');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 // BigInt serialization helper for Express JSON responses
 BigInt.prototype.toJSON = function () {
   return this.toString();
 };
 
-// Middleware
-app.use(cors());
+// CORS configuration (limit only to frontend origin in production)
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (process.env.NODE_ENV === 'production') {
+      if (origin === FRONTEND_URL) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    } else {
+      callback(null, true);
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json());
+
+// Rate Limiting for sensitive authentication endpoints (max 5 requests per 15 minutes)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per 15 minutes
+  message: {
+    error: "Too many login/registration attempts from this IP, please try again after 15 minutes."
+  },
+  standardHeaders: true, // Return rate limit info in standard headers
+  legacyHeaders: false, // Disable X-RateLimit-* headers
+});
+
+// Session middleware (required by Passport.js for OAuth)
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'foodpro-session-secret',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 1 day
+}));
+
+// Initialize Passport.js
+app.use(passport.initialize());
+app.use(passport.session());
+
+// Passport serialization (minimal — we use JWTs, not sessions for auth state)
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((user, done) => done(null, user));
 
 // Log incoming requests for debugging
 app.use((req, res, next) => {
@@ -24,12 +74,54 @@ app.use((req, res, next) => {
   next();
 });
 
+// ============================================================
+// Zod Validation Schemas
+// ============================================================
+
+const registerSchema = z.object({
+  email: z.string().email("Invalid email address.").min(1, "Email is required."),
+  password: z.string().min(6, "Password must be at least 6 characters."),
+  name: z.string().optional(),
+  role: z.string().optional(),
+  company: z.string().optional(),
+});
+
+const loginSchema = z.object({
+  email: z.string().email("Invalid email address.").min(1, "Email is required."),
+  password: z.string().min(1, "Password is required."),
+});
+
+const productionLineSchema = z.object({
+  name: z.string().min(1, "Name must be a non-empty string."),
+  status: z.enum(["Running", "Paused", "Stopped"], {
+    errorMap: () => ({ message: "Status must be one of: Running, Paused, Stopped." }),
+  }),
+  progress: z.coerce.number().min(0, "Progress must be at least 0.").max(100, "Progress must be at most 100."),
+  temp: z.string().min(1, "Temperature must be a non-empty value."),
+});
+
+const productionLinePartialSchema = productionLineSchema.partial();
+
+/**
+ * Zod validation middleware factory.
+ * @param {z.ZodSchema} schema - The Zod schema to validate against.
+ */
+const validate = (schema) => (req, res, next) => {
+  const result = schema.safeParse(req.body);
+  if (!result.success) {
+    const errors = result.error.issues.map(e => e.message);
+    return res.status(400).json({ error: "Validation Failed", details: errors });
+  }
+  req.body = result.data; // Use parsed/cleaned data
+  next();
+};
+
 // Initialize Prisma Client with PostgreSQL Driver Adapter (Prisma 7 standard)
 const databaseUrl = process.env.DATABASE_URL;
 let prisma = null;
 let useDatabase = false;
 
-if (databaseUrl && databaseUrl.trim() !== '') {
+if (databaseUrl && databaseUrl.trim() !== '' && !databaseUrl.includes('[your-password]') && !databaseUrl.includes('[your-project-id]')) {
   try {
     // Parse connection string and override SSL setting for secure connection to Supabase
     const poolConfig = pgConnectionString.parse(databaseUrl);
@@ -44,8 +136,7 @@ if (databaseUrl && databaseUrl.trim() !== '') {
     console.error("Failed to initialize Prisma Client:", error.message);
   }
 } else {
-  console.warn("WARNING: DATABASE_URL is missing or empty in environment variables.");
-  console.warn("Falling back to local in-memory storage mode.");
+  console.warn("WARNING: DATABASE_URL is missing, empty, or using placeholders. Falling back to local in-memory storage mode.");
 }
 
 // Local Seed / Fallback Data
@@ -58,6 +149,13 @@ let productionLines = [
 ];
 
 let nextId = 6;
+
+let users = [
+  { id: "1", name: "Ritik Choudhary", email: "ritik@foodpro.com", role: "Plant Manager", company: "FoodPro Industries", password: null },
+  { id: "2", name: "Vineet Choudhary", email: "vineet@foodpro.com", role: "Operator", company: "FoodPro Industries", password: null },
+  { id: "3", name: "Priya Sharma", email: "priya@foodpro.com", role: "Quality Analyst", company: "FoodPro Industries", password: null }
+];
+let nextUserId = 4;
 
 // Validation helpers
 const VALID_STATUSES = ["Running", "Paused", "Stopped"];
@@ -97,8 +195,35 @@ function validateProductionLine(data, isPartial = false) {
   return errors;
 }
 
+// Authentication Middleware
+const requireAuth = (req, res, next) => {
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+  if (!authHeader) {
+    return res.status(401).json({ error: "Access denied. No authorization header provided." });
+  }
+
+  const parts = authHeader.split(' ');
+  if (parts.length !== 2 || parts[0].toLowerCase() !== 'bearer') {
+    return res.status(401).json({ error: "Access denied. Invalid authorization header format. Use 'Bearer <token>'." });
+  }
+
+  const token = parts[1];
+  const jwtSecret = process.env.JWT_SECRET || 'fallback-super-secret-key-123';
+
+  try {
+    const decoded = jwt.verify(token, jwtSecret);
+    req.user = decoded; // Attach user payload to request
+    next();
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ error: "Access denied. Token has expired." });
+    }
+    return res.status(401).json({ error: "Access denied. Invalid token." });
+  }
+};
+
 // 1. GET /api/production-lines/search — Search production lines
-app.get('/api/production-lines/search', async (req, res) => {
+app.get('/api/production-lines/search', requireAuth, async (req, res) => {
   try {
     const query = req.query.q;
 
@@ -147,7 +272,7 @@ app.get('/api/production-lines/search', async (req, res) => {
 });
 
 // 2. GET /api/production-lines — List all production lines
-app.get('/api/production-lines', async (req, res) => {
+app.get('/api/production-lines', requireAuth, async (req, res) => {
   try {
     if (useDatabase) {
       const lines = await prisma.productionLine.findMany({
@@ -167,7 +292,7 @@ app.get('/api/production-lines', async (req, res) => {
 });
 
 // 3. GET /api/production-lines/:id — Get a single production line
-app.get('/api/production-lines/:id', async (req, res) => {
+app.get('/api/production-lines/:id', requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
@@ -197,14 +322,8 @@ app.get('/api/production-lines/:id', async (req, res) => {
   }
 });
 
-// 4. POST /api/production-lines — Create a new production line
-app.post('/api/production-lines', async (req, res) => {
+app.post('/api/production-lines', requireAuth, validate(productionLineSchema), async (req, res) => {
   try {
-    const errors = validateProductionLine(req.body, false);
-    if (errors.length > 0) {
-      return res.status(400).json({ error: "Validation Failed", details: errors });
-    }
-
     const { name, status, progress, temp } = req.body;
 
     if (useDatabase) {
@@ -237,16 +356,11 @@ app.post('/api/production-lines', async (req, res) => {
 });
 
 // 5. PUT /api/production-lines/:id — Replace/update an existing production line
-app.put('/api/production-lines/:id', async (req, res) => {
+app.put('/api/production-lines/:id', requireAuth, validate(productionLineSchema), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid ID format. ID must be an integer." });
-    }
-
-    const errors = validateProductionLine(req.body, false);
-    if (errors.length > 0) {
-      return res.status(400).json({ error: "Validation Failed", details: errors });
     }
 
     const { name, status, progress, temp } = req.body;
@@ -294,16 +408,11 @@ app.put('/api/production-lines/:id', async (req, res) => {
 });
 
 // 6. PATCH /api/production-lines/:id — Partially update a production line
-app.patch('/api/production-lines/:id', async (req, res) => {
+app.patch('/api/production-lines/:id', requireAuth, validate(productionLinePartialSchema), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
       return res.status(400).json({ error: "Invalid ID format. ID must be an integer." });
-    }
-
-    const errors = validateProductionLine(req.body, true);
-    if (errors.length > 0) {
-      return res.status(400).json({ error: "Validation Failed", details: errors });
     }
 
     const { name, status, progress, temp } = req.body;
@@ -353,7 +462,7 @@ app.patch('/api/production-lines/:id', async (req, res) => {
 });
 
 // 7. DELETE /api/production-lines/:id — Delete a production line
-app.delete('/api/production-lines/:id', async (req, res) => {
+app.delete('/api/production-lines/:id', requireAuth, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
@@ -387,6 +496,230 @@ app.delete('/api/production-lines/:id', async (req, res) => {
     res.status(500).json({ error: "Internal Server Error" });
   }
 });
+
+// 8. POST /api/auth/register — User Registration (Rate limited)
+app.post('/api/auth/register', authLimiter, validate(registerSchema), async (req, res) => {
+  try {
+    const { email, password, name, role, company } = req.body;
+
+    const normalizedEmail = email.toLowerCase().trim();
+
+    // Check duplicate email
+    if (useDatabase) {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: normalizedEmail }
+      });
+      if (existingUser) {
+        return res.status(400).json({ error: "Email is already registered." });
+      }
+    } else {
+      const existingUser = users.find(u => u.email.toLowerCase().trim() === normalizedEmail);
+      if (existingUser) {
+        return res.status(400).json({ error: "Email is already registered." });
+      }
+    }
+
+    // Hash the password using bcrypt with 10 salt rounds (10–12 requested)
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    let newUser;
+    const userName = (name || email.split('@')[0]).trim();
+    const userRole = role || "Operator";
+    const userCompany = company || "";
+
+    if (useDatabase) {
+      try {
+        newUser = await prisma.user.create({
+          data: {
+            email: normalizedEmail,
+            name: userName,
+            role: userRole,
+            company: userCompany,
+            password: hashedPassword
+          }
+        });
+      } catch (dbError) {
+        if (dbError.code === 'P2002') {
+          return res.status(400).json({ error: "Email is already registered." });
+        }
+        throw dbError;
+      }
+    } else {
+      newUser = {
+        id: String(nextUserId++),
+        email: normalizedEmail,
+        name: userName,
+        role: userRole,
+        company: userCompany,
+        password: hashedPassword,
+        createdAt: new Date().toISOString()
+      };
+      users.push(newUser);
+    }
+
+    // Never return the password (plain or hashed) anywhere in the response
+    const userResponse = { ...newUser };
+    delete userResponse.password;
+
+    res.status(201).json(userResponse);
+  } catch (error) {
+    console.error("Registration Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// 9. POST /api/auth/login — User Login (Rate limited)
+app.post('/api/auth/login', authLimiter, validate(loginSchema), async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const normalizedEmail = email.toLowerCase().trim();
+    let user;
+
+    if (useDatabase) {
+      user = await prisma.user.findUnique({
+        where: { email: normalizedEmail }
+      });
+    } else {
+      user = users.find(u => u.email.toLowerCase().trim() === normalizedEmail);
+    }
+
+    // Generic error to prevent user enumeration
+    const invalidCredentialsError = "Invalid email or password.";
+
+    if (!user || !user.password) {
+      return res.status(401).json({ error: invalidCredentialsError });
+    }
+
+    // Compare bcrypt passwords
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: invalidCredentialsError });
+    }
+
+    // Sign JWT
+    const jwtSecret = process.env.JWT_SECRET || 'fallback-super-secret-key-123';
+    if (!process.env.JWT_SECRET) {
+      console.warn("WARNING: JWT_SECRET environment variable is missing, using fallback secret.");
+    }
+
+    // Serialize BigInt id to String safely for the payload
+    const token = jwt.sign(
+      {
+        id: user.id.toString(),
+        email: user.email,
+        role: user.role,
+        company: user.company
+      },
+      jwtSecret,
+      { expiresIn: '7d' } // Expires in 7 days
+    );
+
+    // Return the token and sanitized user details (excluding password)
+    const userResponse = { ...user };
+    delete userResponse.password;
+
+    res.status(200).json({
+      token,
+      user: userResponse
+    });
+  } catch (error) {
+    console.error("Login Error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// ============================================================
+// GitHub OAuth Strategy (Passport.js)
+// ============================================================
+
+const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID;
+const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
+
+if (GITHUB_CLIENT_ID && GITHUB_CLIENT_ID !== 'your_github_client_id' && GITHUB_CLIENT_SECRET) {
+  passport.use(new GitHubStrategy({
+    clientID: GITHUB_CLIENT_ID,
+    clientSecret: GITHUB_CLIENT_SECRET,
+    callbackURL: `http://localhost:${PORT}/api/auth/github/callback`,
+    scope: ['user:email']
+  },
+  async (accessToken, refreshToken, profile, done) => {
+    try {
+      // Extract email (GitHub may return multiple emails)
+      const email = (profile.emails && profile.emails.length > 0)
+        ? profile.emails[0].value.toLowerCase().trim()
+        : `${profile.username}@github.com`;
+      const name = profile.displayName || profile.username || email.split('@')[0];
+
+      let user;
+
+      if (useDatabase) {
+        // Find or create the user in the database
+        user = await prisma.user.findUnique({ where: { email } });
+        if (!user) {
+          user = await prisma.user.create({
+            data: {
+              email,
+              name,
+              role: 'Operator',
+              company: '',
+              password: null // OAuth users don't have a password
+            }
+          });
+        }
+      } else {
+        // In-memory fallback
+        user = users.find(u => u.email.toLowerCase() === email);
+        if (!user) {
+          user = {
+            id: String(nextUserId++),
+            email,
+            name,
+            role: 'Operator',
+            company: '',
+            password: null,
+            createdAt: new Date().toISOString()
+          };
+          users.push(user);
+        }
+      }
+
+      return done(null, user);
+    } catch (error) {
+      return done(error, null);
+    }
+  }));
+
+  // 10. GET /api/auth/github — Trigger GitHub OAuth flow
+  app.get('/api/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
+
+  // 11. GET /api/auth/github/callback — Handle GitHub OAuth callback
+  app.get('/api/auth/github/callback',
+    passport.authenticate('github', { failureRedirect: `${FRONTEND_URL}/login?error=oauth_failed` }),
+    (req, res) => {
+      // Generate JWT for the authenticated user
+      const jwtSecret = process.env.JWT_SECRET || 'fallback-super-secret-key-123';
+      const token = jwt.sign(
+        {
+          id: req.user.id.toString(),
+          email: req.user.email,
+          role: req.user.role,
+          company: req.user.company
+        },
+        jwtSecret,
+        { expiresIn: '7d' }
+      );
+
+      // Redirect to frontend with token in query params
+      res.redirect(`${FRONTEND_URL}/login?token=${token}`);
+    }
+  );
+
+  console.log("GitHub OAuth strategy configured successfully.");
+} else {
+  console.warn("WARNING: GitHub OAuth credentials not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env to enable GitHub login.");
+}
 
 // Basic Root Endpoint to check API status and DB integration mode
 app.get('/', (req, res) => {

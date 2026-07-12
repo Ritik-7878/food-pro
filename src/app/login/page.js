@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 import { Button, Input, Loader, useToast } from "@/components";
 import {
   ChefHat,
   Eye,
   EyeOff,
   ArrowRight,
-  Share2,
 } from "lucide-react";
 
 export default function LoginPage() {
@@ -18,8 +19,43 @@ export default function LoginPage() {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
   const toast = useToast();
+  
+  const { login, isAuthenticated, loading: authLoading, API_BASE } = useAuth();
+  const router = useRouter();
 
-  const handleSubmit = (e) => {
+  // Redirect away from login if already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      router.push("/dashboard");
+    }
+  }, [authLoading, isAuthenticated, router]);
+
+  // Handle OAuth callback token in URL
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tokenParam = params.get("token");
+      const errorParam = params.get("error");
+
+      if (tokenParam) {
+        toast.success("Signed in with GitHub successfully!");
+        login(tokenParam);
+        // Clean query params from URL
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+      } else if (errorParam) {
+        toast.error("GitHub Authentication failed. Please try again.");
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, newUrl);
+      }
+    }
+  }, [login, toast]);
+
+  const handleGitHubLogin = () => {
+    window.location.href = `${API_BASE}/api/auth/github`;
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     const newErrors = {};
 
@@ -32,15 +68,29 @@ export default function LoginPage() {
 
     if (Object.keys(newErrors).length === 0) {
       setLoading(true);
-      // Simulate API call
-      setTimeout(() => {
-        setLoading(false);
-        if (email === "admin@foodpro.com" && password === "password") {
-          toast.success("Signed in successfully! Welcome back.");
-        } else {
-          toast.error("Invalid credentials. Try admin@foodpro.com / password");
+      try {
+        const res = await fetch(`${API_BASE}/api/auth/login`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Login failed");
         }
-      }, 1500);
+
+        toast.success("Signed in successfully! Welcome back.");
+        login(data.token, data.user);
+      } catch (err) {
+        console.error(err);
+        toast.error(err.message || "Invalid credentials. Try registering a new user.");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -152,7 +202,7 @@ export default function LoginPage() {
 
           {/* Social Logins */}
           <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" className="gap-2">
+            <Button variant="outline" className="gap-2" onClick={() => toast.error("Google login is currently disabled. Please use GitHub Login.")}>
               <svg className="w-4.5 h-4.5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
                 <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -161,8 +211,10 @@ export default function LoginPage() {
               </svg>
               Google
             </Button>
-            <Button variant="outline" className="gap-2">
-              <Share2 className="w-4.5 h-4.5" />
+            <Button variant="outline" className="gap-2" onClick={handleGitHubLogin}>
+              <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.438 9.8 8.205 11.385.6.11.82-.26.82-.577v-2.234c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.43.372.82 1.102.82 2.222v3.293c0 .319.22.694.825.576C20.565 21.795 24 17.3 24 12c0-6.63-5.37-12-12-12z" />
+              </svg>
               GitHub
             </Button>
           </div>

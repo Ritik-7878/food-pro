@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   Menu,
   X,
@@ -17,6 +18,7 @@ import {
   Sun,
   Moon,
   Settings,
+  LogOut,
 } from "lucide-react";
 
 const navLinks = [
@@ -31,6 +33,7 @@ export default function Navbar() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
+  const { isAuthenticated, logout } = useAuth();
 
   return (
     <nav className="sticky top-0 z-50 bg-surface/80 dark:bg-surface/75 backdrop-blur-xl border-b border-border transition-all duration-300">
@@ -100,16 +103,28 @@ export default function Navbar() {
               <Settings className="w-4 h-4" />
             </Link>
 
-            {/* Profile Link */}
-            <Link
-              href="/login"
-              id="nav-profile"
-              className={`w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 border border-border flex items-center justify-center text-muted hover:text-primary hover:border-primary/40 transition-all duration-200 hover:scale-105 ${
-                pathname === "/login" ? "ring-2 ring-primary/40" : ""
-              }`}
-            >
-              <User className="w-4 h-4" />
-            </Link>
+            {/* Profile / Logout Button */}
+            {isAuthenticated ? (
+              <button
+                onClick={logout}
+                id="nav-logout"
+                className="w-9 h-9 rounded-full bg-danger/10 border border-danger/20 flex items-center justify-center text-danger hover:bg-danger hover:text-white transition-all duration-200 hover:scale-105 cursor-pointer"
+                aria-label="Log Out"
+                title="Log Out"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            ) : (
+              <Link
+                href="/login"
+                id="nav-profile"
+                className={`w-9 h-9 rounded-full bg-gradient-to-br from-primary/20 to-accent/20 border border-border flex items-center justify-center text-muted hover:text-primary hover:border-primary/40 transition-all duration-200 hover:scale-105 ${
+                  pathname === "/login" ? "ring-2 ring-primary/40" : ""
+                }`}
+              >
+                <User className="w-4 h-4" />
+              </Link>
+            )}
 
             {/* Mobile menu button */}
             <button

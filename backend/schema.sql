@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT NOT NULL UNIQUE,
     role TEXT NOT NULL DEFAULT 'Operator',
     company TEXT DEFAULT '',
+    password TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

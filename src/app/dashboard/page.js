@@ -15,11 +15,13 @@ import {
   Edit2,
   Trash2,
 } from "lucide-react";
-import { Button, Input, Modal, Loader, useToast } from "@/components";
+import { Button, Input, Modal, Loader, useToast, ProtectedRoute } from "@/components";
+import { useAuth } from "@/context/AuthContext";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5001";
 
 export default function DashboardPage() {
+  const { token, logout } = useAuth();
   const toast = useToast();
   
   // Data States
@@ -50,12 +52,21 @@ export default function DashboardPage() {
 
   // Fetch Production Lines (Supports Search)
   const fetchLines = async (query = "") => {
+    if (!token) return;
     setLoading(true);
     try {
       const url = query
         ? `${API_BASE}/api/production-lines/search?q=${encodeURIComponent(query)}`
         : `${API_BASE}/api/production-lines`;
-      const res = await fetch(url);
+      const res = await fetch(url, {
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      if (res.status === 401) {
+        logout();
+        return;
+      }
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
       }
@@ -103,7 +114,10 @@ export default function DashboardPage() {
       const method = isEditing ? "PUT" : "POST";
       const res = await fetch(url, {
         method,
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           name: currentLine.name,
           status: currentLine.status,
@@ -111,6 +125,11 @@ export default function DashboardPage() {
           temp: currentLine.temp,
         }),
       });
+
+      if (res.status === 401) {
+        logout();
+        return;
+      }
 
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
@@ -149,7 +168,15 @@ export default function DashboardPage() {
     try {
       const res = await fetch(`${API_BASE}/api/production-lines/${lineToDelete.id}`, {
         method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${token}`
+        }
       });
+
+      if (res.status === 401) {
+        logout();
+        return;
+      }
 
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`);
@@ -208,7 +235,8 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+    <ProtectedRoute>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       {/* Header */}
       <div className="mb-8 animate-fade-in-up flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
@@ -481,5 +509,6 @@ export default function DashboardPage() {
         </div>
       </Modal>
     </div>
+    </ProtectedRoute>
   );
 }
