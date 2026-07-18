@@ -150,10 +150,11 @@ let productionLines = [
 
 let nextId = 6;
 
+const defaultPasswordHash = bcrypt.hashSync("password123", 10);
 let users = [
-  { id: "1", name: "Ritik Choudhary", email: "ritik@foodpro.com", role: "Plant Manager", company: "FoodPro Industries", password: null },
-  { id: "2", name: "Vineet Choudhary", email: "vineet@foodpro.com", role: "Operator", company: "FoodPro Industries", password: null },
-  { id: "3", name: "Priya Sharma", email: "priya@foodpro.com", role: "Quality Analyst", company: "FoodPro Industries", password: null }
+  { id: "1", name: "Ritik Choudhary", email: "ritik@foodpro.com", role: "Plant Manager", company: "FoodPro Industries", password: defaultPasswordHash },
+  { id: "2", name: "Vineet Choudhary", email: "vineet@foodpro.com", role: "Operator", company: "FoodPro Industries", password: defaultPasswordHash },
+  { id: "3", name: "Priya Sharma", email: "priya@foodpro.com", role: "Quality Analyst", company: "FoodPro Industries", password: defaultPasswordHash }
 ];
 let nextUserId = 4;
 
@@ -720,6 +721,125 @@ if (GITHUB_CLIENT_ID && GITHUB_CLIENT_ID !== 'your_github_client_id' && GITHUB_C
 } else {
   console.warn("WARNING: GitHub OAuth credentials not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env to enable GitHub login.");
 }
+
+// ============================================================
+// AI Quality & Compliance Inspector (Google Gemini API)
+// ============================================================
+
+app.post('/api/ai/inspect-batch', requireAuth, async (req, res) => {
+  try {
+    const { product, stage, temp, notes } = req.body;
+
+    if (!product || !stage || temp === undefined) {
+      return res.status(400).json({ error: "Missing required parameters: product, stage, and temp are required." });
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === "your_gemini_api_key_here") {
+      return res.status(400).json({ 
+        error: "Gemini API key is not configured on the server. Please add GEMINI_API_KEY in the backend .env file." 
+      });
+    }
+
+    const prompt = `You are a food safety expert and a HACCP (Hazard Analysis Critical Control Point) Auditor.
+Your task is to perform an audit on a food processing batch using the parameters provided below:
+- Product Category/Name: ${product}
+- Current Process Stage: ${stage}
+- Operating Temperature: ${temp}
+- Operator Notes/Observations: ${notes || "No notes provided."}
+
+CRITICAL AUDITING CRITERIA:
+1. Dairy Products (e.g. Milk, Yogurt, Cheese):
+   - Pasteurization stage must be at least 72°C (161°F) for safe treatment.
+   - Fermentation stage (e.g. Yogurt) temperature should be between 38°C and 45°C.
+   - Finished product storage/packaging must be chilled (below 4°C / 40°F).
+2. Meat/Poultry Products:
+   - Processing must occur in chilled environments (below 10°C).
+   - Storage/Packaging must be under refrigeration (below 4°C) or freezing (below -18°C).
+3. Beverages / Juices:
+   - Thermal processing/Pasteurization requires at least 85°C.
+   - Storage must be below 4°C unless shelf-stable vacuum sealed.
+4. Bakery / Grains:
+   - Milling/Mixing must be dry (under 30°C to avoid moisture accumulation and mold).
+   - Baking must be high temperature (internal crumb temp > 90°C).
+5. Quality and Contamination Check (Notes Analysis):
+   - Any notes indicating foreign objects (hair, glass, metal, plastic), mold, chemical smell, off-color, or pest traces MUST immediately result in a "failed" status with defects > 0.
+   - Minor issues (e.g., "minor shape irregularity", "speed fluctuation") should flag a "warning".
+
+Determine:
+- "status": "failed" if there is any biological, physical, or temperature safety breach. "warning" if parameters are sub-optimal but not immediately hazardous. "passed" if completely compliant.
+- "confidence": Your assessment confidence (0-100).
+- "defects": Number of compliance/quality issues detected.
+- "details": Concise, professional summary of the assessment.
+- "hazards": Specific safety threats identified (e.g., pathogen growth risk, physical contaminant). Empty array if none.
+- "recommendations": Immediate actionable corrective steps (e.g., "Halt line and re-pasteurize", "Adjust chiller thermostat").
+
+You must return a single JSON object matching this schema. No preamble, no markdown formatting blocks, just the JSON text.`;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout for thinking models
+
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+    const response = await fetch(geminiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              {
+                text: prompt
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseMimeType: "application/json"
+        }
+      })
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error("Gemini API error status:", response.status, errorData);
+      return res.status(response.status).json({ 
+        error: errorData.error?.message || "Error calling Google Gemini API",
+        details: errorData.error
+      });
+    }
+
+    const responseData = await response.json();
+    const text = responseData.candidates?.[0]?.content?.parts?.[0]?.text;
+
+    if (!text) {
+      return res.status(500).json({ error: "Empty response from Gemini AI service." });
+    }
+
+    try {
+      const result = JSON.parse(text.trim());
+      return res.status(200).json(result);
+    } catch (parseError) {
+      console.error("JSON Parse error on Gemini output:", text, parseError);
+      return res.status(500).json({ 
+        error: "AI service response could not be parsed as valid JSON.", 
+        rawOutput: text 
+      });
+    }
+
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      return res.status(504).json({ error: "AI service request timed out after 60 seconds." });
+    }
+    console.error("AI Inspect Endpoint Error:", error);
+    return res.status(500).json({ error: "Internal Server Error during AI analysis." });
+  }
+});
 
 // Basic Root Endpoint to check API status and DB integration mode
 app.get('/', (req, res) => {
